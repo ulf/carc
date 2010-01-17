@@ -1,0 +1,23 @@
+.rot0 {
+    -webkit-transform: rotate(0deg); 
+    -moz-transform: rotate(0deg);
+    rotation: 0deg;
+    filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=0);
+}
+.rot1 {
+    -webkit-transform: rotate(90deg); 
+    -moz-transform: rotate(90deg);
+    rotation: 90deg;
+    filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=1);
+}
+.rot2 {
+    -webkit-transform: rotate(180deg); 
+    -moz-transform: rotate(180deg);
+    rotation: 180deg;
+    filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=2);
+}
+.rot3 {
+    -webkit-transform: rotate(270deg); 
+    -moz-transform: rotate(270deg);
+    filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+}

@@ -1,0 +1,10 @@
+This shall one day be a playable online version of Carcassonne using Clojure and Compojure
+
+We'll see
+
+Currently you can create a new game with some players and then place cards in turn. So far so good.
+
+next steps:
+
+1. Place Icons on the board
+2. Keep score

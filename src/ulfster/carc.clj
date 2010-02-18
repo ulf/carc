@@ -1,4 +1,4 @@
-(ns carc
+(ns ulfster.carc
   (:gen-class)
   (:require clojure.set)
   (:require clojure.contrib.seq-utils)

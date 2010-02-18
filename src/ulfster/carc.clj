@@ -45,43 +45,43 @@
    (addpoints [0 3] [1 1]) -> [1 4]"
   (vec (apply map + pts)))
 
-(defn outerFields [fields]
+(defn outer-fields [fields]
   "Returns all adjacent fields of all existing fields"
   (for [f fields ;Loop through all fields
 	d dirs]  ;For every field look in every direction
     (addpoints (f :pos) d)))
 
-(defn freeFields [fields]
-  "Returns the outerFields which are not occupied"
+(defn free-fields [fields]
+  "Returns the outer-fields which are not occupied"
   (vec
    (clojure.set/difference
     ;Take the adjacent fields
-    (set (outerFields fields))
+    (set (outer-fields fields))
     ;But without fields which are already occupied
     (set (for [f fields] (f :pos))))))
 
-(defn getField [fields pos]
+(defn get-field [fields pos]
   "Returns the field structure residing at the specified position or nil"
   (first
    (filter
     #(= pos (:pos %))
     fields)))
 
-(defn getStructure [f]
+(defn get-structure [f]
   "Return a vector containing the entitytypes and the rotation of the card in the specified field"
      (if
 	 (nil? f)
        nil
        (vec (list ((f :card) :entities) (f :rotation)))))
 
-(defn getPattern [field allfields]
+(defn get-pattern [field allfields]
   "Returns pattern necessary to put a card in the specified spot.
    Patterns are 4-el vectors containing either nil or an entitiy keyword as elements"
   (let [neighbors (for [d dirs] (addpoints d field)) ; neighbors are locations of all adjacent fields
-	nFields (map #(getField allfields %) neighbors) ; get field structures of that locations
+	nFields (map #(get-field allfields %) neighbors) ; get field structures of that locations
 	borders (zipmap ; create an index-keyed map of the structural items
 		 (range 4)
-		 (map getStructure nFields))
+		 (map get-structure nFields))
 	p (for [k (sort (keys borders))] ; return 4-vec pattern to fit in the spot at field
 	    (if (nil? (borders k))
 	      nil
@@ -89,12 +89,12 @@
 	]
     (vec p)))
 
-(defn matchPattern [c p]
+(defn match-pattern [c p]
   "Calculates whether the card c can fit into pattern p"
   (if (and (empty? c) (empty? p))
     true
     (if (or (= (first c) (first p)) (= nil (first p)))
-      (matchPattern (rest c) (rest p))
+      (match-pattern (rest c) (rest p))
       false)))
 
 (defn matchable [card pattern]
@@ -105,19 +105,19 @@
     (filter #(not (nil? %))
 	    (for [k (sort (keys patterns))]
 	      (if
-		  (matchPattern card (patterns k))
+		  (match-pattern card (patterns k))
 		k
 		nil)))))
 
-(defn possibleMoves [fields card]
+(defn possible-moves [fields card]
   "Returns a list of all free fields where the card fits and the rotation values that qualify"
   (if card
-    (let [free (freeFields fields)
+    (let [free (free-fields fields)
 	  entities (card :entities)]
       (filter #(not (empty? (% 1))) ; only allow fields with at least one fitting possibility
 	      (map #(vec (list (% 0) (matchable entities (% 1))))
 		   (for [f free]
-		     (vec (list f (getPattern f fields)))))))
+		     (vec (list f (get-pattern f fields)))))))
     ()))
   
 (defn boundaries [fields]
@@ -135,19 +135,19 @@
 	    [x y] (f :pos)]
 	(recur (rest flds) (min xl x) (max xh x) (min yl y) (max yh y))))))
 
-(defn showField [game usercookie]
+(defn show-field [game usercookie]
   "Displays html version of game's current playing field"
   (let [fields @(game :fields)
 	card (first @(game :cards))
 	hash (game :code)
 	turn @(game :turn)
 	[xs ys] (boundaries fields)
-	possible (possibleMoves fields card)]
+	possible (possible-moves fields card)]
     [:table {:cellpadding "0" :cellspacing "0"}
      (for [y ys]
        [:tr 
 	(for [x xs]
-	  (let [field (getField fields [x y])
+	  (let [field (get-field fields [x y])
 		moves (nth (first (filter #(= [x y] (% 0)) possible)) 1 false)]
 	    [:td {:width 105 :height 105}
 	     (if field
@@ -164,7 +164,7 @@
 	    ))])]))
 
 
-(defn addPlayer [game player]
+(defn add-player [game player]
   "Add a player to the specified game"
   (dosync
    (ref-set (game :players) (assoc @(game :players) (player :code) player))
@@ -173,14 +173,14 @@
    (if (not @(game :turn))
      (ref-set (game :turn) (player :code)))))
 
-(defn initGame [games]
+(defn init-game [games]
   "This initializes a new game, stores it in the global games map and returns the new game"
   (let [code (.substring (str (rand)) 2)
 	game (struct game code (ref fields) (ref (clojure.contrib.seq-utils/shuffle cards)) (ref {}) (ref false) (ref 0) (ref {}))]
     (dosync (ref-set games (assoc @games (keyword code) game)))
     game))
 
-(defn createFieldForm []
+(defn create-field-form []
   "Display form to create a new game"
   (html
    [:head
@@ -197,7 +197,7 @@
      [:input {:type "submit" :value "start"}]
     ]]))
 
-(defn sendInvite [name email code gameHash]
+(defn send-invite [name email code gameHash]
   "Returns invitation string to be sent as email"
   (format "
 To: %s
@@ -209,17 +209,17 @@ Have Fun!
 "
 	    email name gameHash code))
  
-(defn createField [params]
+(defn create-field [params]
   "Creates new Gameboard and adds the players to the game"
-  (let [game (initGame games)
+  (let [game (init-game games)
 	users (zipmap (filter #(> (count (.trim %)) 0) (params (keyword "user[]"))) (params (keyword "email[]")))]
     (for [name (keys users)]
       (let [code (.substring (str (rand)) 2)]
-	(addPlayer game (struct player name code (ref {}) (ref 0) (ref 0)))
-	(html [:p (sendInvite name (users name) code (game :code))])
+	(add-player game (struct player name code (ref {}) (ref 0) (ref 0)))
+	(html [:p (send-invite name (users name) code (game :code))])
 	))))
 
-(defn joinGame [gameHash cookieHash]
+(defn join-game [gameHash cookieHash]
   "Lets a player join a game he has been invited to"
   (let [game (@games (keyword gameHash))]
     (if
@@ -233,7 +233,7 @@ Have Fun!
 	    {:status 200 :headers ((compojure.http.helpers/set-cookie gameHash cookieHash "path" "/") :headers) :body (html [:a {:href (str "/board/" gameHash)} "Congrats!"])} ))))))
 
 
-(defn showMenu [game usercookie]
+(defn show-menu [game usercookie]
   "Return HTML of overview column"
   (let [players @(game :players)
 	me (players usercookie)
@@ -253,7 +253,7 @@ Have Fun!
 	     [:tr [:td {:colspan "2"} [:img {:src (str "/static/icons/" (:name card) ".JPG") :width 103 :height 103}]]])
        [:tr [:td {:colspan "2"} "Finished"]])]))
   
-(defn showBoard [game usercookie]
+(defn show-board [game usercookie]
   "Return HTML code of entire board, including menu"
   (if game
     (html
@@ -263,8 +263,8 @@ Have Fun!
      [:body
       [:table
        [:tr
-	[:td {:valign "top"} (showMenu game usercookie)]
-	[:td {:valign "top"} (showField game usercookie)]
+	[:td {:valign "top"} (show-menu game usercookie)]
+	[:td {:valign "top"} (show-field game usercookie)]
 	]]])
     "game not found"))
 
@@ -282,11 +282,11 @@ Have Fun!
     (redirect-to (str "/board/" (game :code)))))
 	   
 (defroutes carcassonne
-  (GET  "/"         (showField fields)) 
-  (GET  "/new"      (createFieldForm))
-  (POST "/new"      (createField params))
-  (GET  "/join/:hash/:cookie" (joinGame (params :hash) (params :cookie)))
-  (GET  "/board/:hash"  (showBoard (@games (keyword (params :hash))) (cookies (keyword (params :hash)))))
+  (GET  "/"         (show-field fields))
+  (GET  "/new"      (create-field-form))
+  (POST "/new"      (create-field params))
+  (GET  "/join/:hash/:cookie" (join-game (params :hash) (params :cookie)))
+  (GET  "/board/:hash"  (show-board (@games (keyword (params :hash))) (cookies (keyword (params :hash)))))
   (GET  "/board/:hash/move/:x/:y/:rot"  (move (@games (keyword (params :hash)))
 					      (cookies (keyword (params :hash)))
 					      (Integer. (params :x))

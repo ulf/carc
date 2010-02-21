@@ -216,7 +216,7 @@ Have Fun!
 	users (zipmap (filter #(> (count (.trim %)) 0) (params (keyword "user[]"))) (params (keyword "email[]")))]
     (for [name (keys users)]
       (let [code (.substring (str (rand)) 2)]
-	(dosync (alter games assoc (keyword (game :code)) (add-player game (struct player name code {} 0 0))))
+	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code {} 0 0))))
 	(html [:p (send-invite name (users name) code (game :code))])
 	))))
 

@@ -137,10 +137,10 @@
 
 (defn show-field [game usercookie]
   "Displays html version of game's current playing field"
-  (let [fields @(game :fields)
-	card (first @(game :cards))
+  (let [fields (game :fields)
+	card (first (game :cards))
 	hash (game :code)
-	turn @(game :turn)
+	turn (game :turn)
 	[xs ys] (boundaries fields)
 	possible (possible-moves fields card)]
     [:table {:cellpadding "0" :cellspacing "0"}
@@ -165,19 +165,20 @@
 
 
 (defn add-player [game player]
-  "Add a player to the specified game"
-  (dosync
-   (ref-set (game :players) (assoc @(game :players) (player :code) player))
-   (let [k (keys @(game :players))]
-     (ref-set (game :next) (zipmap k (take (count k) (drop 1 (cycle k))))))
-   (if (not @(game :turn))
-     (ref-set (game :turn) (player :code)))))
+  "Pure function to add a player to a game struct"
+  (let [players (assoc (game :players) (:code player) player)
+	k (keys players)]
+    (assoc game
+      :players players
+      :next (zipmap k (take (count k) (drop 1 (cycle k))))
+      :turn (or (game :turn) (player :code))
+      )))
 
 (defn init-game [games]
   "This initializes a new game, stores it in the global games map and returns the new game"
   (let [code (.substring (str (rand)) 2)
-	game (struct game code (ref fields) (ref (clojure.contrib.seq-utils/shuffle cards)) (ref {}) (ref false) (ref 0) (ref {}))]
-    (dosync (ref-set games (assoc @games (keyword code) game)))
+	game (struct game code fields (clojure.contrib.seq-utils/shuffle cards) {} false 0 {})]
+    (dosync (alter games assoc (keyword code) game))
     game))
 
 (defn create-field-form []
@@ -215,9 +216,13 @@ Have Fun!
 	users (zipmap (filter #(> (count (.trim %)) 0) (params (keyword "user[]"))) (params (keyword "email[]")))]
     (for [name (keys users)]
       (let [code (.substring (str (rand)) 2)]
-	(add-player game (struct player name code (ref {}) (ref 0) (ref 0)))
+	(dosync (alter games assoc (keyword (game :code)) (add-player game (struct player name code {} 0 0))))
 	(html [:p (send-invite name (users name) code (game :code))])
 	))))
+
+(defn player-join-game [game player]
+  "Returns modified gamestruct with joined player"
+  (assoc game :players (assoc (game :players) (player :code) (assoc player :joined 1))))
 
 (defn join-game [gameHash cookieHash]
   "Lets a player join a game he has been invited to"
@@ -225,20 +230,20 @@ Have Fun!
     (if
 	(empty? game)
       (html "Game does not exist")
-      (let [player (@(game :players) cookieHash)]
-	(if (= 1 @(player :joined))
+      (let [player ((game :players) cookieHash)]
+	(if (= 1 (player :joined))
 	  (html "Already joined")
 	  (do	    
-	    (dosync (alter (player :joined) inc))
+	    (dosync (alter games assoc (keyword gameHash) (player-join-game game player)))
 	    {:status 200 :headers ((compojure.http.helpers/set-cookie gameHash cookieHash "path" "/") :headers) :body (html [:a {:href (str "/board/" gameHash)} "Congrats!"])} ))))))
 
 
 (defn show-menu [game usercookie]
   "Return HTML of overview column"
-  (let [players @(game :players)
+  (let [players (game :players)
 	me (players usercookie)
-	card (first @(game :cards))
-	turn @(game :turn)]
+	card (first (game :cards))
+	turn (game :turn)]
     [:table
      [:tr [:td {:colspan 2} (str "Hallo " (me :name))]]
      (for [k (keys players)]
@@ -247,7 +252,7 @@ Have Fun!
 	  (if (= (p :code) turn)
 	    [:td [:b (p :name)]]
 	    [:td (p :name)])
-	  [:td @(p :points)]]))
+	  [:td (p :points)]]))
      (if card
        (html [:tr [:td {:colspan "2"} "Card"]]
 	     [:tr [:td {:colspan "2"} [:img {:src (str "/static/icons/" (:name card) ".JPG") :width 103 :height 103}]]])
@@ -268,17 +273,23 @@ Have Fun!
 	]]])
     "game not found"))
 
+(defn make-move [game currentuser x y rotation]
+  "Return modified game struct with move made"
+  (let [c (first (game :cards))]
+    (assoc game 
+      :fields (conj (game :fields) (struct field (inc (count (game :fields))) c rotation [x y]))
+      :cards (rest (game :cards))
+      :turn ((game :next) currentuser)
+      )))
+
 (defn move [game usercookie x y rotation]
   "Make a move, set card at specified position and rotation
    if it's the requeting players turn"
-  (if (and (= @(game :turn) usercookie)
-	   (= @(game :stage) 0))
-    (let [c (first @(game :cards))]
+  (if (and (= (game :turn) usercookie)
+	   (= (game :stage) 0))
       (dosync
-       (alter (game :fields) conj (struct field (inc (count @(game :fields))) c rotation [x y]))
-       (alter (game :cards) rest)
-       (ref-set (game :turn) (@(game :next) usercookie))
-       (redirect-to (str "/board/" (game :code)))))
+       (alter games assoc (keyword (game :code)) (make-move game usercookie x y rotation)) 
+       (redirect-to (str "/board/" (game :code))))
     (redirect-to (str "/board/" (game :code)))))
 	   
 (defroutes carcassonne
@@ -292,7 +303,7 @@ Have Fun!
 					      (Integer. (params :x))
 					      (Integer. (params :y))
 					      (Integer. (params :rot))))
-  (GET  "/static/*" (serve-file "../res" (params :*)))
+  (GET  "/static/*" (serve-file "../../res" (params :*))) ; Path has to be adjusted when developing in SLIME
   (ANY "*"  404))
  
 (defn -main [& args]

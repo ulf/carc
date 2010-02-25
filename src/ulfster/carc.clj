@@ -135,23 +135,36 @@
 	    [x y] (f :pos)]
 	(recur (rest flds) (min xl x) (max xh x) (min yl y) (max yh y))))))
 
+(defn display-field [field]
+  [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103}])
+
+(defn display-current-field [field]
+  [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103 :style "border: 2px solid #FF0000"}])
+
 (defn show-field [game usercookie]
   "Displays html version of game's current playing field"
   (let [fields (game :fields)
 	card (first (game :cards))
 	hash (game :code)
 	turn (game :turn)
-	[xs ys] (boundaries fields)
-	possible (possible-moves fields card)]
+	stage (game :stage)
+	totalfields (count (game :fields))
+	[xs ys] (boundaries fields)]
     [:table {:cellpadding "0" :cellspacing "0"}
      (for [y ys]
        [:tr 
 	(for [x xs]
 	  (let [field (get-field fields [x y])
 		moves (nth (first (filter #(= [x y] (% 0)) possible)) 1 false)]
-	    [:td {:width 105 :height 105}
+	    [:td {:width 103 :height 103}
 	     (if field
-	       [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103}]   
+	       ; If field is set display the card, plus the possibilities to place an icon if the stage is 1
+	       (if (and (= stage 1)
+			(= (field :id) totalfields)
+			(= turn usercookie))
+		 (display-current-field field)
+		 (display-field field))
+	       ; if the field is not set display possible moves there if suitable
 	       (if (and moves (= turn usercookie))
 		 [:div {:width 103 :height 103 :style "background-color: #EFEFEF"}
 		  (for [m moves]
@@ -279,7 +292,9 @@ Have Fun!
     (assoc game 
       :fields (conj (game :fields) (struct field (inc (count (game :fields))) c rotation [x y]))
       :cards (rest (game :cards))
-      :turn ((game :next) currentuser)
+;      :stage 1
+     :stage 0
+     :turn ((game :next) currentuser)
       )))
 
 (defn move [game usercookie x y rotation]

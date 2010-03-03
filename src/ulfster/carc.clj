@@ -12,15 +12,17 @@
 ; Card is rotated :rotation * 90 degrees clockwise
 (defstruct field :id :card :rotation :pos)
 ; A player avatar on the playing field
-(defstruct icon :id :player :field :location :type)
+(defstruct icon :player :field :location :type)
 ; A player taking part in a game :code is used to limit access to the correct games
 ; Cookie needs to be set, :gamecode=:playercode
 (defstruct player :name :code :icons :points :joined)
 ; One game running on the server, including the already placed cards (fields), the remaining
 ; cards and the players as well as turn information
-(defstruct game :code :fields :cards :players :turn :stage :next)
+(defstruct game :code :fields :cards :players :icons :turn :stage :next)
 
 (def games (ref {})) ;global games list
+
+(def DEFAULT_ICONS 6)
 
 ;Database of cards, incomplete
 (def cards (concat
@@ -213,7 +215,7 @@
 (defn init-game [games]
   "This initializes a new game, stores it in the global games map and returns the new game"
   (let [code (.substring (str (rand)) 2)
-	game (struct game code fields (clojure.contrib.seq-utils/shuffle cards) {} false 0 {})]
+	game (struct game code fields (clojure.contrib.seq-utils/shuffle cards) {} () false 0 {})]
     (dosync (alter games assoc (keyword code) game))
     game))
 
@@ -252,7 +254,7 @@ Have Fun!
 	users (zipmap (filter #(> (count (.trim %)) 0) (params (keyword "user[]"))) (params (keyword "email[]")))]
     (for [name (keys users)]
       (let [code (.substring (str (rand)) 2)]
-	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code () 0 0))))
+	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code DEFAULT_ICONS 0 0))))
 	(html [:p (send-invite name (users name) code (game :code))])
 	))))
 
@@ -335,13 +337,13 @@ Have Fun!
   (let [user ((game :players) currentuser)]
     (assoc game
       :players (assoc (game :players) currentuser
-		      (assoc user :icons (cons  (struct icon
-							(inc (count (user :icons)))
-							currentuser
-							((current-field game) :pos)
-							place
-							true)
-						(user :icons))))
+		      (assoc user :icons (dec (user :icons))))
+      :icons (cons  (struct icon
+			    currentuser
+			    ((current-field game) :pos)
+			    place
+			    true)
+		    (game :icons))
       :stage 0
       :turn ((game :next) currentuser)
       )))

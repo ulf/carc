@@ -138,8 +138,30 @@
 (defn display-field [field]
   [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103}])
 
-(defn display-current-field [field]
-  [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103 :style "border: 2px solid #FF0000"}])
+
+(defn get-possible-moves [field]
+  "Returns places where the player at turn can place a figure, same entities with existing connection
+   are only counted once, return the already rotated "
+  (let [c (:card field)
+	conns (:connections c)
+	ends (set (map #(nth % 1) conns))
+	entities (clojure.set/difference
+		  (set (map #(if (= (% 1) :g) nil (% 0))
+			    (zipmap (range 4) (:entities c))))
+		  #{nil})
+	allowed (clojure.set/difference entities ends)]
+    (map #(mod (+ % (:rotation field)) 4) allowed)
+    ))
+
+(def coords {0 [48 0] 1 [96 48] 2 [48 85] 3 [0 48]})
+
+(defn display-current-field [field hash]
+  (let [possible (get-possible-moves field)]
+    (html [:div {:style "position: relative"} [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103}]
+	  (for [p possible]
+	    [:div {:style (str "position: absolute; top: " ((coords p) 1) "; left: " ((coords p) 0) )}
+	     [:a {:href (str "/board/" hash "/set/" p) :style "font-weight: bold; color: #00FF00; text-decoration: none"} p ]]
+	    )])))
 
 (defn show-field [game usercookie]
   "Displays html version of game's current playing field"
@@ -149,7 +171,8 @@
 	turn (game :turn)
 	stage (game :stage)
 	totalfields (count (game :fields))
-	[xs ys] (boundaries fields)]
+	[xs ys] (boundaries fields)
+	possible (possible-moves fields card)]
     [:table {:cellpadding "0" :cellspacing "0"}
      (for [y ys]
        [:tr 
@@ -162,10 +185,10 @@
 	       (if (and (= stage 1)
 			(= (field :id) totalfields)
 			(= turn usercookie))
-		 (display-current-field field)
+		 (display-current-field field hash)
 		 (display-field field))
 	       ; if the field is not set display possible moves there if suitable
-	       (if (and moves (= turn usercookie))
+	       (if (and moves (= turn usercookie) (= stage 0))
 		 [:div {:width 103 :height 103 :style "background-color: #EFEFEF"}
 		  (for [m moves]
 		    [:a {:href (str "/board/" hash "/move/" x "/" y "/" m)}
@@ -229,7 +252,7 @@ Have Fun!
 	users (zipmap (filter #(> (count (.trim %)) 0) (params (keyword "user[]"))) (params (keyword "email[]")))]
     (for [name (keys users)]
       (let [code (.substring (str (rand)) 2)]
-	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code {} 0 0))))
+	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code () 0 0))))
 	(html [:p (send-invite name (users name) code (game :code))])
 	))))
 
@@ -292,9 +315,7 @@ Have Fun!
     (assoc game 
       :fields (conj (game :fields) (struct field (inc (count (game :fields))) c rotation [x y]))
       :cards (rest (game :cards))
-;      :stage 1
-     :stage 0
-     :turn ((game :next) currentuser)
+      :stage 1
       )))
 
 (defn move [game usercookie x y rotation]
@@ -304,6 +325,34 @@ Have Fun!
 	   (= (game :stage) 0))
       (dosync
        (alter games assoc (keyword (game :code)) (make-move game usercookie x y rotation)) 
+       (redirect-to (str "/board/" (game :code))))
+    (redirect-to (str "/board/" (game :code)))))
+
+(defn current-field [game]
+  (first (game :fields)))
+
+(defn placed-icon [game currentuser place]
+  (let [user ((game :players) currentuser)]
+    (assoc game
+      :players (assoc (game :players) currentuser
+		      (assoc user :icons (cons  (struct icon
+							(inc (count (user :icons)))
+							currentuser
+							((current-field game) :pos)
+							place
+							true)
+						(user :icons))))
+      :stage 0
+      :turn ((game :next) currentuser)
+      )))
+
+(defn place-icon [game usercookie place]
+  "Make a move, set icon at specified position and rotation
+   if it's the requeting players turn"
+  (if (and (= (game :turn) usercookie)
+	   (= (game :stage) 1))
+      (dosync
+       (alter games assoc (keyword (game :code)) (placed-icon game usercookie place)) 
        (redirect-to (str "/board/" (game :code))))
     (redirect-to (str "/board/" (game :code)))))
 	   
@@ -318,6 +367,9 @@ Have Fun!
 					      (Integer. (params :x))
 					      (Integer. (params :y))
 					      (Integer. (params :rot))))
+  (GET  "/board/:hash/set/:place"  (place-icon (@games (keyword (params :hash)))
+					 (cookies (keyword (params :hash)))
+					 (Integer. (params :place))))
   (GET  "/static/*" (serve-file "../../res" (params :*))) ; Path has to be adjusted when developing in SLIME
   (ANY "*"  404))
  

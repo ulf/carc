@@ -168,6 +168,7 @@
 (defn show-field [game usercookie]
   "Displays html version of game's current playing field"
   (let [fields (game :fields)
+	player ((game :players) usercookie)
 	card (first (game :cards))
 	hash (game :code)
 	turn (game :turn)
@@ -186,7 +187,8 @@
 	       ; If field is set display the card, plus the possibilities to place an icon if the stage is 1
 	       (if (and (= stage 1)
 			(= (field :id) totalfields)
-			(= turn usercookie))
+			(= turn usercookie)
+			(> (player :icons) 0))
 		 (display-current-field field hash)
 		 (display-field field))
 	       ; if the field is not set display possible moves there if suitable

@@ -137,9 +137,22 @@
 	    [x y] (f :pos)]
 	(recur (rest flds) (min xl x) (max xh x) (min yl y) (max yh y))))))
 
+(defn get-icons [game field]
+  (for [i (:icons game) :when (= (i :field) (field :pos))]
+    (i :location)))
+
 (defn display-field [field]
   [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103}])
 
+(def coords {0 [48 0] 1 [96 48] 2 [48 85] 3 [0 48]})
+
+(defn display-field-with-icons [game field]
+  (html [:div {:style "position: relative"} 
+	 (display-field field)
+	 (for [i (get-icons game field)]
+	   [:div {:style (str "position: absolute; top: " ((coords i) 1) "; left: " ((coords i) 0) )}
+	    [:span {:style "font-weight: bold; color: #00FF00; text-decoration: none"} "x" ]]
+	   )]))
 
 (defn get-possible-moves [field]
   "Returns places where the player at turn can place a figure, same entities with existing connection
@@ -154,8 +167,6 @@
 	allowed (clojure.set/difference entities ends)]
     (map #(mod (+ % (:rotation field)) 4) allowed)
     ))
-
-(def coords {0 [48 0] 1 [96 48] 2 [48 85] 3 [0 48]})
 
 (defn display-current-field [field hash]
   (let [possible (get-possible-moves field)]
@@ -190,7 +201,7 @@
 			(= turn usercookie)
 			(> (player :icons) 0))
 		 (display-current-field field hash)
-		 (display-field field))
+		 (display-field-with-icons game field))
 	       ; if the field is not set display possible moves there if suitable
 	       (if (and moves (= turn usercookie) (= stage 0))
 		 [:div {:width 103 :height 103 :style "background-color: #EFEFEF"}

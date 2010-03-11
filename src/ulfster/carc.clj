@@ -15,7 +15,7 @@
 (defstruct icon :player :field :location :type)
 ; A player taking part in a game :code is used to limit access to the correct games
 ; Cookie needs to be set, :gamecode=:playercode
-(defstruct player :name :code :icons :points :joined)
+(defstruct player :name :code :icons :points :joined :color)
 ; One game running on the server, including the already placed cards (fields), the remaining
 ; cards and the players as well as turn information
 (defstruct game :code :fields :cards :players :icons :turn :stage :next)
@@ -23,6 +23,7 @@
 (def games (ref {})) ;global games list
 
 (def DEFAULT_ICONS 6)
+(def colors '("#FF0000" "#00FF00" "#0000FF"))
 
 ;Database of cards, incomplete
 (def cards (concat
@@ -139,7 +140,7 @@
 
 (defn get-icons [game field]
   (for [i (:icons game) :when (= (i :field) (field :pos))]
-    (i :location)))
+    [(i :location) ((game :players) (i :player))]))
 
 (defn display-field [field]
   [:img {:src (str "/static/icons/" (:name (:card field)) ".JPG") :class (str "rot" (:rotation field)) :width 103 :height 103}])
@@ -149,9 +150,9 @@
 (defn display-field-with-icons [game field]
   (html [:div {:style "position: relative"} 
 	 (display-field field)
-	 (for [i (get-icons game field)]
+	 (for [[i p] (get-icons game field)]
 	   [:div {:style (str "position: absolute; top: " ((coords i) 1) "; left: " ((coords i) 0) )}
-	    [:span {:style "font-weight: bold; color: #00FF00; text-decoration: none"} "x" ]]
+	    [:span {:style (str "font-weight: bold; color: " (p :color) "; text-decoration: none")} "x" ]]
 	   )]))
 
 (defn get-possible-moves [field]
@@ -267,7 +268,7 @@ Have Fun!
 	users (zipmap (filter #(> (count (.trim %)) 0) (params (keyword "user[]"))) (params (keyword "email[]")))]
     (for [name (keys users)]
       (let [code (.substring (str (rand)) 2)]
-	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code DEFAULT_ICONS 0 0))))
+	(dosync (alter games assoc (keyword (game :code)) (add-player (games (keyword (game :code))) (struct player name code DEFAULT_ICONS 0 0 (nth colors (count ((games (keyword (game :code))) :players)))))))
 	(html [:p (send-invite name (users name) code (game :code))])
 	))))
 
@@ -301,8 +302,8 @@ Have Fun!
        (let [p (players k)]
 	 [:tr
 	  (if (= (p :code) turn)
-	    [:td [:b (p :name)]]
-	    [:td (p :name)])
+	    [:td {:style (str "color: " (p :color))} [:b (p :name)]]
+	    [:td {:style (str "color: " (p :color))} (p :name)])
 	  [:td (p :points)]]))
      (if card
        (html [:tr [:td {:colspan "2"} "Card"]]
